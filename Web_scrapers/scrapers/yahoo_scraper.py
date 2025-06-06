@@ -3,8 +3,9 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import random
 from transformers import pipeline
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
-# Load summarizer model
 print("[INFO] Loading summarizer model...")
 summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
@@ -40,26 +41,20 @@ def fetch_full_article(link):
     try:
         print(f"[INFO] Fetching article: {link}")
         res = requests.get(link, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(res.text, "html.parser")
+        soup = BeautifulSoup(res.content, features="xml")
 
-        # Try different ways to get article text
         article_body = soup.find("div", {"class": "caas-body"})
         if not article_body:
             article_tag = soup.find("article")
-            if article_tag:
-                paragraphs = article_tag.find_all("p")
-            else:
-                paragraphs = soup.find_all("p")
+            paragraphs = article_tag.find_all("p") if article_tag else soup.find_all("p")
         else:
             paragraphs = article_body.find_all("p")
 
         article_text = " ".join(p.get_text() for p in paragraphs).strip()
 
-        # Minimum content length check
         if len(article_text.split()) < 30:
             return None, None
 
-        # Try getting image
         img_tag = soup.find("img", {"class": "caas-img"})
         image_url = img_tag['src'] if img_tag and 'src' in img_tag.attrs else None
 
@@ -69,7 +64,33 @@ def fetch_full_article(link):
         print(f"[WARN] Error fetching article content: {e}")
         return None, None
 
-def scrape_yahoo_news():
+def process_article(item, delay_between_requests=0):
+    title = item.title.text.strip()
+    link = item.link.text.strip()
+    if not link.startswith("https://finance.yahoo.com"):
+        return None
+
+    article_text, image_url = fetch_full_article(link)
+    if delay_between_requests > 0:
+        time.sleep(delay_between_requests)
+
+    if not article_text:
+        print(f"[WARN] Skipped '{title}' - no content.")
+        return None
+
+    final_text = summarize_if_needed(article_text)
+    summary = to_gen_z_style(final_text)
+
+    return {
+        "headline": title,
+        "url": link,
+        "summary": summary,
+        "image_url": image_url,
+        "source": "Yahoo",
+        "scraped_at": datetime.now()
+    }
+
+def scrape_yahoo_news(max_articles=5, max_workers=1, delay_between_requests=0):
     print("[INFO] Fetching RSS feed...")
     res = requests.get(RSS_URL, headers=HEADERS)
     soup = BeautifulSoup(res.content, features="xml")
@@ -78,39 +99,20 @@ def scrape_yahoo_news():
     print(f"[INFO] Found {len(items)} articles in RSS feed.")
     articles = []
 
-    for item in items:
-        title = item.title.text.strip()
-        link = item.link.text.strip()
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_article, item, delay_between_requests): item for item in items}
 
-        if not link.startswith("https://finance.yahoo.com"):
-            continue
-
-        print(f"\n[INFO] Processing: {title}")
-        article_text, image_url = fetch_full_article(link)
-
-        if not article_text:
-            print("[WARN] Skipped - no content.")
-            continue
-
-        final_text = summarize_if_needed(article_text)
-        summary = to_gen_z_style(final_text)
-
-        articles.append({
-            "headline": title,
-            "url": link,
-            "summary": summary,
-            "image_url": image_url,
-            "scraped_at": datetime.now().isoformat(),
-            "source": "Yahoo Finance"
-        })
-
-        if len(articles) >= 5:
-            break
+        for future in as_completed(futures):
+            article = future.result()
+            if article:
+                articles.append(article)
+                if len(articles) >= max_articles:
+                    break
 
     return articles
 
 if __name__ == "__main__":
-    results = scrape_yahoo_news()
+    results = scrape_yahoo_news(max_articles=5, max_workers=1, delay_between_requests=1)
 
     if not results:
         print("[❌] No valid Yahoo Finance articles found.")
@@ -118,5 +120,5 @@ if __name__ == "__main__":
         for article in results:
             print(f"\n📰 {article['headline']}")
             print(f"🔗 {article['url']}")
-            print(f"🖼️ {article['image_url']}")
+            print(f"🖼️ {article.get('image_url')}")
             print(f"📝 {article['summary']}")
