@@ -29,7 +29,10 @@ def scrape_moneycontrol_news():
                 continue
 
             headline = title_tag.get_text(strip=True)
-            link = title_tag.find('a')['href']
+            link_tag = title_tag.find_parent('a')
+            if not link_tag:
+                 continue
+            link = link_tag['href']
             summary = item.find('p').get_text(strip=True) if item.find('p') else ''
 
             news_data.append({

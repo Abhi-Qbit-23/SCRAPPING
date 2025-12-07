@@ -12,7 +12,8 @@ summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 RSS_URL = "https://finance.yahoo.com/news/rssindex"
 
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.15; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
 }
 
@@ -41,7 +42,7 @@ def fetch_full_article(link):
     try:
         print(f"[INFO] Fetching article: {link}")
         res = requests.get(link, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(res.content, features="xml")
+        soup = BeautifulSoup(res.content, 'html.parser')
 
         article_body = soup.find("div", {"class": "caas-body"})
         if not article_body:
