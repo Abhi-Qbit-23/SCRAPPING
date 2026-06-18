@@ -1,0 +1,12 @@
+# Default ignored files
+/.idea/
+/.junie/
+/.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.DS_Store
+*.log

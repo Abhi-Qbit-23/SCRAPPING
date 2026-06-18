@@ -2,12 +2,17 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import random
-from transformers import pipeline
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.summarizers.lsa import LsaSummarizer
+from nltk.tokenize import sent_tokenize
+import nltk
 
-print("[INFO] Loading summarizer model...")
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', quiet=True)
 
 RSS_URL = "https://finance.yahoo.com/news/rssindex"
 
@@ -32,8 +37,13 @@ def summarize_if_needed(text, word_threshold=60):
         return text.strip()
     try:
         print(f"[INFO] Summarizing article ({word_count} words)...")
-        result = summarizer(text, max_length=80, min_length=40, do_sample=False)
-        return result[0]['summary_text']
+        sentences = sent_tokenize(text)
+        if len(sentences) <= 3:
+            return text.strip()
+
+        summary_sentences = sentences[:3]
+        summary_text = " ".join(summary_sentences)
+        return summary_text.strip()
     except Exception as e:
         print(f"[WARN] Summarization failed: {e}")
         return text.strip()
