@@ -1,5 +1,6 @@
 name: Financial News Scraper
 
+# Forcing cron update
 on:
   schedule:
     # Run every 30 minutes
