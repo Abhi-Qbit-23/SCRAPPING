@@ -4,7 +4,7 @@ name: Financial News Scraper
 on:
   schedule:
     # Run every 30 minutes
-    - cron: '*/30 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
