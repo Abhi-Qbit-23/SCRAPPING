@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from typing import Optional
 import time
 import random
 
@@ -9,7 +10,7 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
+    'Accept-Encoding': 'gzip, deflate',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
     'Sec-Fetch-Dest': 'document',
@@ -48,7 +49,7 @@ def _build_session() -> requests.Session:
     return session
 
 
-def _fetch_with_retry(session: requests.Session, url: str, retries: int = 3) -> requests.Response | None:
+def _fetch_with_retry(session: requests.Session, url: str, retries: int = 3) -> Optional[requests.Response]:
     """GET with exponential backoff on 403/429/5xx."""
     for attempt in range(1, retries + 1):
         try:
@@ -76,7 +77,7 @@ def _fetch_with_retry(session: requests.Session, url: str, retries: int = 3) -> 
     return None
 
 
-def _parse_html_page(html_content: bytes) -> list[dict]:
+def _parse_html_page(html_content: bytes) -> list:
     """Parse articles from the MoneyControl markets news page HTML."""
     soup = BeautifulSoup(html_content, 'html.parser')
     news_data = []
@@ -112,7 +113,7 @@ def _parse_html_page(html_content: bytes) -> list[dict]:
     return news_data
 
 
-def _scrape_via_rss() -> list[dict]:
+def _scrape_via_rss() -> list:
     """
     Fallback: parse MoneyControl's public RSS feed.
     RSS endpoints are far less likely to be blocked.
@@ -155,7 +156,7 @@ def _scrape_via_rss() -> list[dict]:
         return []
 
 
-def scrape_moneycontrol_news() -> list[dict]:
+def scrape_moneycontrol_news() -> list:
     """
     Primary scraper: attempts the HTML news page with a warmed-up session
     and retry/backoff logic. Falls back to RSS if the page remains blocked.
