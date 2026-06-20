@@ -63,6 +63,19 @@ _NOISE_PATTERNS = [
     "privacy policy",
     "all rights reserved",
     "read more:",
+    # Third-party publisher ad/affiliate disclosures
+    "offers on this page are from advertisers",
+    "advertiser disclosure",
+    "advertiser's",
+    "compensation may impact",
+    "we may earn",
+    "we earn a commission",
+    "editorial note:",
+    "editorial opinions",
+    "this article was written by",
+    "originally published",
+    "see our advertiser",
+    "this content is not provided by",
 ]
 
 def _is_noise(text: str) -> bool:
@@ -88,6 +101,13 @@ def fetch_full_article(link):
     try:
         print(f"[INFO] Fetching article: {link}")
         res = requests.get(link, headers=HEADERS, timeout=15)
+
+        # Reject if redirected off Yahoo Finance (e.g. to a third-party publisher)
+        final_url = res.url
+        if "finance.yahoo.com" not in final_url:
+            print(f"[WARN] Redirected off Yahoo Finance to {final_url} — skipping.")
+            return None, None
+
         soup = BeautifulSoup(res.content, 'html.parser')
 
         # Primary: Yahoo Finance article body container
