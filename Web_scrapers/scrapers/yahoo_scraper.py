@@ -48,22 +48,69 @@ def summarize_if_needed(text, word_threshold=60):
         print(f"[WARN] Summarization failed: {e}")
         return text.strip()
 
+# Patterns that identify boilerplate / ad / disclaimer paragraphs to drop
+_NOISE_PATTERNS = [
+    "yahoo finance is not a broker",
+    "not a broker-dealer",
+    "investment adviser",
+    "pays us for certain activity",
+    "affiliate link",
+    "sponsored",
+    "advertisement",
+    "click here to",
+    "the above button",
+    "terms and conditions",
+    "privacy policy",
+    "all rights reserved",
+    "read more:",
+]
+
+def _is_noise(text: str) -> bool:
+    """Return True if a paragraph is boilerplate / ad / disclaimer content."""
+    lower = text.lower()
+    return any(pattern in lower for pattern in _NOISE_PATTERNS)
+
+def _clean_paragraphs(paragraphs) -> list[str]:
+    """
+    Filter out noise paragraphs and return only substantive text blocks.
+    A paragraph is kept if:
+      - it has at least 8 words (skips button labels, short captions)
+      - it doesn't match any known noise pattern
+    """
+    cleaned = []
+    for p in paragraphs:
+        text = p.get_text(separator=" ", strip=True)
+        if len(text.split()) >= 8 and not _is_noise(text):
+            cleaned.append(text)
+    return cleaned
+
 def fetch_full_article(link):
     try:
         print(f"[INFO] Fetching article: {link}")
         res = requests.get(link, headers=HEADERS, timeout=15)
         soup = BeautifulSoup(res.content, 'html.parser')
 
+        # Primary: Yahoo Finance article body container
         article_body = soup.find("div", {"class": "caas-body"})
-        if not article_body:
-            article_tag = soup.find("article")
-            paragraphs = article_tag.find_all("p") if article_tag else soup.find_all("p")
-        else:
+
+        if article_body:
             paragraphs = article_body.find_all("p")
+        else:
+            # Narrower fallback: prefer <article> tag over full page scan
+            article_tag = soup.find("article")
+            if article_tag:
+                paragraphs = article_tag.find_all("p")
+            else:
+                # Last resort: scoped to main content area if present
+                main = soup.find("main") or soup.find("div", {"id": "Col1-0-ContentCanvas"})
+                paragraphs = main.find_all("p") if main else []
 
-        article_text = " ".join(p.get_text() for p in paragraphs).strip()
+        clean_texts = _clean_paragraphs(paragraphs)
+        article_text = " ".join(clean_texts).strip()
 
-        if len(article_text.split()) < 30:
+        # Require at least 60 words of real content
+        if len(article_text.split()) < 60:
+            print(f"[WARN] Insufficient article content ({len(article_text.split())} words) — skipping.")
             return None, None
 
         img_tag = soup.find("img", {"class": "caas-img"})
